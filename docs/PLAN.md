@@ -1,7 +1,41 @@
 # Piano app for iPhone Duo: development plan
 
-Status: draft, 2026-10-27. Device and API facts are in
+Status: in progress, 2026-10-27. Device and API facts are in
 [IPHONE_DUO_REFERENCE.md](IPHONE_DUO_REFERENCE.md), with links to Apple's documentation.
+
+## Decisions (confirmed 2026-10-27)
+
+| Question | Answer |
+| --- | --- |
+| Mac and Xcode | Yes. Mac being updated to macOS 27.2. |
+| Apple Developer Program | Yes, paid account. |
+| iPhone Duo for testing | Yes. |
+| Goal | **Paid App Store release.** |
+| iOS support | **Any iPhone on iOS 18 or later**, optimized for iPhone Duo. The iPhone Duo APIs switch on only on iOS 27.1+. All of them live in `PianoApp/Duo/DuoSupport.swift`. |
+
+Why iOS 18: it covers iPhone XS/XR and newer and includes `@Observable`, SwiftData, and
+Swift Testing. Going lower would mean writing older patterns for a shrinking audience.
+This overrides assumption 2 below.
+
+### Progress
+
+| Phase | Status |
+| --- | --- |
+| 0. Setup | Done in the repo: Xcode project, `PianoCore` package, `.gitignore`. Needs a first build on the Mac. |
+| 1. Sound | Code written (`PianoEngine`). Uses a placeholder tone until a piano SoundFont is added. Not yet compiled. |
+| 2. Keyboard | Code written. Key-layout and touch logic: 30 unit tests passing (`swift test`). The UIKit view isn't compiled yet. |
+| 3. iPhone Duo layout | Fold alignment, gap, and laptop pose done and tested in `PianoCore`. Hooked to `reservedRegions` in `DuoSupport.swift`. Needs simulator and device testing. |
+| 4. Hinge lid | Code written, off by default. Needs a check of the angle direction in the simulator. |
+
+### Paid release: business setup (do any time)
+
+- App Store Connect → Business: sign the **Paid Apps Agreement** and add tax and banking
+  details. A paid app can't go on sale without these.
+- Reserve the app name in App Store Connect (create the app record). "Piano" is a placeholder.
+- Choose the bundle ID. The project uses `com.morgancollado.piano`; change it in Xcode
+  before creating the App Store record if you want something else.
+- Commercial use makes the sample license matter more: confirm the piano sample set allows
+  commercial use and note what attribution it needs.
 
 ## 1. Goal
 
