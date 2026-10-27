@@ -34,8 +34,8 @@ This overrides assumption 2 below.
 - Reserve the app name in App Store Connect (create the app record). "Piano" is a placeholder.
 - Choose the bundle ID. The project uses `com.morgancollado.piano`; change it in Xcode
   before creating the App Store record if you want something else.
-- Commercial use makes the sample license matter more: confirm the piano sample set allows
-  commercial use and note what attribution it needs.
+- Piano samples: Salamander Grand Piano, public domain since 2022. Details in
+  [SOUND_LICENSING.md](SOUND_LICENSING.md). Credit Alexander Holm in the app anyway.
 
 ## 1. Goal
 
@@ -222,7 +222,7 @@ Rough total: 4–6 weeks part-time for phases 0–4 and 6. Phase 5 adds 1–2 we
 | Touch accuracy on the crease (flat) | Keys next to the fold could misfire | Fold alignment helps. Test on hardware, add a small dead zone if needed. |
 | `ArrangementView` overlay behavior | It may not pin the keyboard as needed | Prototype in Phase 3; the fallback is a custom reserved-region layout. |
 | Hinge angle direction (which value is flat) | The lid mapping depends on it | Check in the simulator. Not stated in the docs read so far. |
-| Sample license and size | App size, legal attribution | Confirm the license before Phase 1 ends. |
+| Sample license and size | App size, legal attribution | License settled: Salamander Grand Piano is public domain (see [SOUND_LICENSING.md](SOUND_LICENSING.md)). Still to do: build a trimmed SoundFont. |
 | No pressure input | Expression is limited | Position-based velocity, MIDI keyboard support. |
 
 ## 7. Questions for you
