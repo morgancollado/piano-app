@@ -27,6 +27,38 @@ Checked 2026-10-27. This app is a paid App Store release, so the samples must al
   terms, and the full SoundFont (~296 MB) is too large to load into an iPhone's memory.
   Download the original from https://freepats.zenvoid.org/Piano/ (44.1 kHz 16-bit SFZ, ~394 MB).
 
+## The built SoundFont: `PianoApp/Piano.sf2`
+
+Built on 2026-10-27 with `tools/soundfont/build_salamander_sf2.py` from
+`SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz` (FreePats mirror).
+
+| | |
+| --- | --- |
+| Size | 64.7 MB, stereo, 44.1 kHz / 16-bit |
+| Notes | 30 sampled notes (every minor third, A0–C8), each covering 2–3 keys |
+| Velocity layers | 4 of the original 16: layers 4, 9, 13, 16, mapped to velocities 1–54, 55–84, 85–112, 113–127 |
+| Note start | Silence before the hammer strike trimmed to 1 ms (the originals had 2–15 ms) |
+| Sustain | First 1.2–3 s kept as recorded, then a crossfaded loop; the volume envelope continues the fade at the measured rate (at least 1.2 dB/s in the bass, rising to ~13 dB/s at C8) |
+| Release | 1 s after key-up; 5 s from F#6 up (no dampers on a real grand) |
+| Not included | Release resonance, hammer-release noise, and pedal noise samples (SoundFont 2 can't trigger samples on key release) |
+
+Checks (`tools/soundfont/check_soundfont.py`, rendered with FluidSynth 2.3.4):
+pitch within 2.2 cents of the original recordings from E2 to C8; every key at 4 velocities
+sounds; all 240 loop points valid, with the worst seam jump at 1.1× a normal waveform step;
+held-note fades match the originals within ~1–4 dB through 16 s in the bass and middle;
+loudness rises steadily with velocity, with at most 1.2 dB extra at a layer change.
+
+To rebuild:
+
+```sh
+curl -O "https://freepats.zenvoid.org/Piano/SalamanderGrandPiano/SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz"
+tar xJf SalamanderGrandPianoV3+20161209_44khz16bit.tar.xz
+python3 tools/soundfont/build_salamander_sf2.py SalamanderGrandPianoV3_44.1khz16bit PianoApp/Piano.sf2
+```
+
+The README bundled inside that 2016 download still says "CC-by". That predates the creator's
+2022 public-domain statement quoted above.
+
 ## Optional second sound: Upright Piano KW
 
 - Kawai upright recorded in a living room (2017). **CC0 1.0** (formal public-domain dedication).

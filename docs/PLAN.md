@@ -22,7 +22,7 @@ This overrides assumption 2 below.
 | Phase | Status |
 | --- | --- |
 | 0. Setup | Done in the repo: Xcode project, `PianoCore` package, `.gitignore`. Needs a first build on the Mac. |
-| 1. Sound | Code written (`PianoEngine`). Uses a placeholder tone until a piano SoundFont is added. Not yet compiled. |
+| 1. Sound | Code written (`PianoEngine`). Piano sound built: `PianoApp/Piano.sf2`, 64.7 MB, checked with FluidSynth. Not yet compiled or heard through AVAudioUnitSampler. |
 | 2. Keyboard | Code written. Key-layout and touch logic: 30 unit tests passing (`swift test`). The UIKit view isn't compiled yet. |
 | 3. iPhone Duo layout | Fold alignment, gap, and laptop pose done and tested in `PianoCore`. Hooked to `reservedRegions` in `DuoSupport.swift`. Needs simulator and device testing. |
 | 4. Hinge lid | Code written, off by default. Needs a check of the angle direction in the simulator. |
@@ -222,7 +222,7 @@ Rough total: 4–6 weeks part-time for phases 0–4 and 6. Phase 5 adds 1–2 we
 | Touch accuracy on the crease (flat) | Keys next to the fold could misfire | Fold alignment helps. Test on hardware, add a small dead zone if needed. |
 | `ArrangementView` overlay behavior | It may not pin the keyboard as needed | Prototype in Phase 3; the fallback is a custom reserved-region layout. |
 | Hinge angle direction (which value is flat) | The lid mapping depends on it | Check in the simulator. Not stated in the docs read so far. |
-| Sample license and size | App size, legal attribution | License settled: Salamander Grand Piano is public domain (see [SOUND_LICENSING.md](SOUND_LICENSING.md)). Still to do: build a trimmed SoundFont. |
+| Sample license and size | App size, legal attribution | License settled (public domain) and a 64.7 MB SoundFont built ([SOUND_LICENSING.md](SOUND_LICENSING.md)). Still to check on device: memory use and the velocity feel through AVAudioUnitSampler. |
 | No pressure input | Expression is limited | Position-based velocity, MIDI keyboard support. |
 
 ## 7. Questions for you

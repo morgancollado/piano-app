@@ -53,6 +53,12 @@ struct SettingsScreen: View {
                 } footer: {
                     Text("When the phone is partly folded, closing it makes the sound softer and darker, like lowering a piano lid.")
                 }
+
+                Section("Credits") {
+                    Text("Piano sound: Salamander Grand Piano, a Yamaha C5 recorded by Alexander Holm.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

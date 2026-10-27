@@ -27,7 +27,8 @@ Packages/PianoCore/       Pure Swift logic with unit tests: notes, key layout, f
 2. Select the **PianoApp** target → **Signing & Capabilities** → choose your team.
 3. Pick a simulator (try **iPhone Duo**) or your device and press Run.
 
-Until a piano SoundFont is added, the keys play a placeholder tone.
+The piano sound is `PianoApp/Piano.sf2` (Salamander Grand Piano, public domain). How it was
+built and checked: [docs/SOUND_LICENSING.md](docs/SOUND_LICENSING.md).
 
 ## Tests
 
@@ -38,8 +39,9 @@ swift test
 
 The same tests run in Xcode if you open `Packages/PianoCore/Package.swift`.
 
-## Adding the piano sound
+## Rebuilding the piano sound
 
-Add a SoundFont named `Piano.sf2` to the `PianoApp/` folder. Xcode includes it automatically,
-and `PianoEngine` loads it at launch. Check that its license allows commercial use and
-add any required attribution in the app.
+`tools/soundfont/build_salamander_sf2.py` rebuilds `Piano.sf2` from the original recordings
+(needs Python 3 and numpy). `tools/soundfont/check_soundfont.py` checks the result
+(also needs FluidSynth). Steps are in [docs/SOUND_LICENSING.md](docs/SOUND_LICENSING.md).
+Avoid committing rebuilds often: each version adds ~65 MB to the git history.
