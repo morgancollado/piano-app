@@ -1,4 +1,9 @@
 import Foundation
+// CGRect, CGSize and CGPoint get their Equatable conformance from CoreGraphics on Apple
+// platforms, so import it directly. On Linux these types come from Foundation.
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// How hard a note sounds. iPhone screens don't sense pressure, so the app offers
 /// a fixed level or a level based on where the finger lands on the key.

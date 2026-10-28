@@ -1,4 +1,9 @@
 import Foundation
+// CGRect, CGSize and CGPoint get their Equatable conformance from CoreGraphics on Apple
+// platforms, so import it directly. On Linux these types come from Foundation.
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// Where a vertical fold crosses the keyboard, in the keyboard's own coordinates.
 public struct FoldInfo: Sendable, Equatable {

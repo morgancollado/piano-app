@@ -1,4 +1,9 @@
 import Foundation
+// CGRect, CGSize and CGPoint get their Equatable conformance from CoreGraphics on Apple
+// platforms, so import it directly. On Linux these types come from Foundation.
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// The iPhone Duo fold as reported by the system, in the play surface's coordinates.
 public struct Division: Sendable, Equatable {
