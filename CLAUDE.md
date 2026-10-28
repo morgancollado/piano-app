@@ -23,3 +23,4 @@ Read `docs/PLAN.md` (plan, decisions, progress) and `docs/IPHONE_DUO_REFERENCE.m
 - Every toolbar item needs a title and an SF Symbol (iPhone Duo puts bars on the side).
 - Every touch path must end its notes, including `touchesCancelled`. No stuck notes.
 - Swift 6 language mode; the app target defaults to MainActor isolation.
+- Colors and gradients live in `PianoApp/Theme/PianoTheme.swift`. The play screen is always dark.

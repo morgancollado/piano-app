@@ -89,13 +89,40 @@ struct KeyboardLayoutTests {
         #expect(layout.key(at: CGPoint(x: 445, y: 300)) == nil)
     }
 
-    @Test func offCenterFoldKeepsKeysTheSameWidth() {
-        // A side bar on one edge makes the fold sit off the keyboard's center.
+    @Test func offCenterFoldFillsBothSidesWithSimilarKeys() throws {
+        // A side bar on one edge makes the fold sit off the keyboard's centre.
         let fold = FoldInfo(centerX: 400, width: 0)
         let layout = KeyboardLayout(size: CGSize(width: 840, height: 300), fold: fold, targetWhiteKeyWidth: 60)
-        let widths = Set(layout.whiteKeys.map { ($0.frame.width * 1000).rounded() })
-        #expect(widths.count == 1)
-        #expect(layout.whiteKeys.allSatisfy { $0.frame.minX >= -0.001 && $0.frame.maxX <= 840.001 })
+        let widths = layout.whiteKeys.map(\.frame.width)
+        let narrowest = try #require(widths.min())
+        let widest = try #require(widths.max())
+        #expect((widest - narrowest) / narrowest <= KeyboardLayout.maxSideWidthMismatch + 0.0001)
+        // No empty strip at either end.
+        #expect(abs((layout.whiteKeys.first?.frame.minX ?? -1) - 0) < 0.001)
+        #expect(abs((layout.whiteKeys.last?.frame.maxX ?? -1) - 840) < 0.001)
+        // Still a plain gap at the fold.
+        let beforeFold = try #require(layout.whiteKeysBeforeFold)
+        #expect(FoldAlignment.hasPlainGap(after: layout.whiteKeys[beforeFold - 1].note))
+    }
+
+    @Test func screenshotCaseStartsOnCWithNoEmptyStrip() throws {
+        // From the first simulator run: the side bar left 630 points left of the fold and 520
+        // right of it (pixel-ish numbers, same ratio), which gave B3–B5 and a black strip.
+        let fold = FoldInfo(centerX: 630, width: 0)
+        let layout = KeyboardLayout(size: CGSize(width: 1150, height: 450), fold: fold, targetWhiteKeyWidth: 74)
+        let lowest = try #require(layout.lowestNote)
+        #expect([0, 5].contains(lowest.pitchClass), "starts on \(lowest)")
+        #expect(abs((layout.whiteKeys.first?.frame.minX ?? -1)) < 0.001)
+        #expect(abs((layout.whiteKeys.last?.frame.maxX ?? -1) - 1150) < 0.001)
+    }
+
+    // Realistic fold positions: the fold sits near the middle, shifted by a side bar.
+    @Test(arguments: [360.0, 420.0, 445.0, 500.0, 560.0])
+    func foldLayoutsStartOnCOrFWhenPossible(center: Double) throws {
+        let layout = KeyboardLayout(size: CGSize(width: 890, height: 380),
+                                    fold: FoldInfo(centerX: center, width: 0), targetWhiteKeyWidth: 60)
+        let lowest = try #require(layout.lowestNote)
+        #expect([0, 5].contains(lowest.pitchClass), "fold at \(center) starts on \(lowest)")
     }
 
     @Test func foldTooCloseToAnEdgeIsIgnored() {

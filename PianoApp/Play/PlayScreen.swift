@@ -20,13 +20,21 @@ struct PlayScreen: View {
 
             ZStack {
                 if let content = surface.contentRect {
-                    NoteDisplay(
-                        notes: session.soundingNotes,
-                        range: layout.noteRange,
-                        soundStatus: session.engine.statusMessage
-                    )
-                        .frame(width: content.width, height: content.height)
-                        .position(x: content.midX, y: content.midY)
+                    ZStack {
+                        LinearGradient(colors: PianoTheme.standColors, startPoint: .top, endPoint: .bottom)
+                        NoteTrailsView(
+                            trails: session.trails,
+                            keyFrames: Self.keyFrames(of: layout, keyboard: surface.keyboardRect, content: content)
+                        )
+                        NoteDisplay(
+                            notes: session.soundingNotes,
+                            range: layout.noteRange,
+                            soundStatus: session.engine.statusMessage
+                        )
+                    }
+                    .frame(width: content.width, height: content.height)
+                    .clipped()
+                    .position(x: content.midX, y: content.midY)
                 }
 
                 KeyboardView(
@@ -40,11 +48,21 @@ struct PlayScreen: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
+        .background(PianoTheme.body.ignoresSafeArea())
         // A piano always runs low notes on the left.
         .environment(\.layoutDirection, .leftToRight)
         // Swipes along the bottom edge should play keys before they open the Home Screen.
         .defersSystemGestures(on: .bottom)
         .persistentSystemOverlays(.hidden)
         .onHingeReading { session.hinge = $0 }
+    }
+
+    /// Key frames moved from the keyboard's coordinates into the content area's.
+    private static func keyFrames(of layout: KeyboardLayout, keyboard: CGRect, content: CGRect) -> [Note: CGRect] {
+        var frames: [Note: CGRect] = [:]
+        for key in layout.whiteKeys + layout.blackKeys {
+            frames[key.note] = key.frame.offsetBy(dx: keyboard.minX - content.minX, dy: 0)
+        }
+        return frames
     }
 }

@@ -11,15 +11,17 @@ struct NoteDisplay: View {
     var body: some View {
         VStack(spacing: 8) {
             Text(notes.isEmpty ? " " : notes.sorted().map(\.name).joined(separator: "  "))
-                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .font(.system(size: 46, weight: .medium, design: .rounded))
+                .foregroundStyle(PianoTheme.noteText)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.4)
+                .shadow(color: .black.opacity(0.6), radius: 8)
 
             if let range {
                 Text("\(range.lowerBound.name) – \(range.upperBound.name)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(PianoTheme.noteText.opacity(0.45))
             }
 
             if let soundStatus {

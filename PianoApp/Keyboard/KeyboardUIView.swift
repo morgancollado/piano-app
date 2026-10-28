@@ -19,7 +19,7 @@ final class KeyboardUIView: UIView {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         isOpaque = true
-        backgroundColor = .black
+        backgroundColor = PianoTheme.bodyUI
         contentMode = .redraw
 
         // Lets VoiceOver users play the keys directly.
@@ -86,54 +86,142 @@ final class KeyboardUIView: UIView {
     // MARK: - Drawing
 
     override func draw(_ rect: CGRect) {
-        UIColor.black.setFill()
-        UIRectFill(bounds)
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+        PianoTheme.bodyUI.setFill()
+        context.fill(bounds)
         guard let layout else { return }
 
         let held = tracker.heldNotes
-        let pressedTint = tintColor.withAlphaComponent(0.45)
-        let corner = CGSize(width: 6, height: 6)
+        let metrics = KeyMetrics(whiteWidth: layout.whiteKeyWidth, height: bounds.height)
 
         for key in layout.whiteKeys {
-            let shape = UIBezierPath(
-                roundedRect: key.frame.insetBy(dx: 0.75, dy: 0),
-                byRoundingCorners: [.bottomLeft, .bottomRight],
-                cornerRadii: corner
-            )
-            UIColor.white.setFill()
-            shape.fill()
-            if held.contains(key.note) {
-                pressedTint.setFill()
-                shape.fill()
-            }
-            if showsNoteLabels, key.note.pitchClass == 0 {
-                drawLabel(key.note.name, in: key.frame)
-            }
+            drawWhiteKey(key, pressed: held.contains(key.note), metrics: metrics, in: context)
         }
-
         for key in layout.blackKeys {
-            let shape = UIBezierPath(
-                roundedRect: key.frame,
-                byRoundingCorners: [.bottomLeft, .bottomRight],
-                cornerRadii: CGSize(width: 4, height: 4)
-            )
-            (held.contains(key.note) ? UIColor(white: 0.32, alpha: 1) : UIColor(white: 0.08, alpha: 1)).setFill()
-            shape.fill()
-            if held.contains(key.note) {
-                pressedTint.setFill()
-                shape.fill()
-            }
+            drawBlackKey(key, pressed: held.contains(key.note), metrics: metrics, in: context)
+        }
+        drawFelt(metrics: metrics, in: context)
+    }
+
+    /// Sizes of the drawn details, scaled to the keys.
+    private struct KeyMetrics {
+        let gap: CGFloat
+        let corner: CGFloat
+        let lip: CGFloat
+        let feltHeight: CGFloat
+        let blackInset: CGFloat
+        let blackFront: CGFloat
+
+        init(whiteWidth: CGFloat, height: CGFloat) {
+            gap = min(2, max(1, whiteWidth * 0.03))
+            corner = min(7, whiteWidth * 0.11)
+            lip = min(9, max(4, height * 0.028))
+            feltHeight = min(7, max(4, height * 0.016))
+            blackInset = max(1.5, whiteWidth * 0.06)
+            blackFront = min(12, max(5, height * 0.035))
         }
     }
 
-    private func drawLabel(_ text: String, in frame: CGRect) {
-        let fontSize = min(14, max(9, frame.width * 0.26))
+    private func drawWhiteKey(_ key: PianoKey, pressed: Bool, metrics: KeyMetrics, in context: CGContext) {
+        let frame = key.frame.insetBy(dx: metrics.gap / 2, dy: 0)
+        let corner = CGSize(width: metrics.corner, height: metrics.corner)
+        let shape = UIBezierPath(roundedRect: frame, byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: corner)
+
+        context.saveGState()
+        shape.addClip()
+        fillVertical(frame, with: pressed ? PianoTheme.whiteKeyPressed : PianoTheme.whiteKey, in: context)
+
+        // The rounded front edge of the key. A pressed key shows less of it, as if it sank.
+        let lip = pressed ? metrics.lip * 0.45 : metrics.lip
+        fillVertical(CGRect(x: frame.minX, y: frame.maxY - lip, width: frame.width, height: lip),
+                     with: PianoTheme.whiteLip, in: context)
+
+        if pressed {
+            let glowTop = frame.minY + frame.height * 0.35
+            fillVertical(CGRect(x: frame.minX, y: glowTop, width: frame.width, height: frame.maxY - glowTop),
+                         with: PianoTheme.keyGlow(tintColor), in: context)
+        }
+        context.restoreGState()
+
+        if showsNoteLabels, key.note.pitchClass == 0 {
+            drawLabel(key.note.name, in: frame, above: metrics.lip)
+        }
+    }
+
+    private func drawBlackKey(_ key: PianoKey, pressed: Bool, metrics: KeyMetrics, in context: CGContext) {
+        let frame = key.frame
+        let radius = min(4, frame.width * 0.12)
+        let corners = CGSize(width: radius, height: radius)
+        let body = UIBezierPath(roundedRect: frame, byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: corners)
+
+        // Shadow cast onto the white keys; shorter when pressed, because the key is lower.
+        context.saveGState()
+        context.setShadow(
+            offset: CGSize(width: 0, height: pressed ? 1.5 : 4),
+            blur: pressed ? 3 : 7,
+            color: UIColor.black.withAlphaComponent(0.5).cgColor
+        )
+        PianoTheme.blackSideUI.setFill()
+        body.fill()
+        context.restoreGState()
+
+        // Top surface, inset from the sides, ending where the sloped front face starts.
+        let front = pressed ? metrics.blackFront * 0.5 : metrics.blackFront
+        let top = CGRect(x: frame.minX + metrics.blackInset, y: frame.minY,
+                         width: max(0, frame.width - 2 * metrics.blackInset), height: max(0, frame.height - front))
+        context.saveGState()
+        UIBezierPath(roundedRect: top, byRoundingCorners: [.bottomLeft, .bottomRight],
+                     cornerRadii: CGSize(width: radius * 0.6, height: radius * 0.6)).addClip()
+        fillVertical(top, with: pressed ? PianoTheme.blackTopPressed : PianoTheme.blackTop, in: context)
+        if pressed {
+            let glowTop = top.minY + top.height * 0.4
+            fillVertical(CGRect(x: top.minX, y: glowTop, width: top.width, height: top.maxY - glowTop),
+                         with: PianoTheme.keyGlow(tintColor), in: context)
+        }
+        context.restoreGState()
+
+        // Front face: a lighter sloped edge at the end of the key.
+        let face = CGRect(x: frame.minX + 1, y: top.maxY, width: max(0, frame.width - 2), height: max(0, frame.maxY - top.maxY - 1))
+        context.saveGState()
+        UIBezierPath(roundedRect: face, byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: corners).addClip()
+        fillVertical(face, with: PianoTheme.blackFront, in: context)
+        context.restoreGState()
+    }
+
+    /// The red felt strip along the back of the keys, and the shadow it casts on them.
+    private func drawFelt(metrics: KeyMetrics, in context: CGContext) {
+        let shadow = CGRect(x: 0, y: metrics.feltHeight, width: bounds.width, height: metrics.feltHeight * 2.4)
+        fillVertical(shadow, with: PianoTheme.fallboardShadow, in: context)
+        let felt = CGRect(x: 0, y: 0, width: bounds.width, height: metrics.feltHeight)
+        fillVertical(felt, with: PianoTheme.felt, in: context)
+    }
+
+    /// Fills `rect` with a top-to-bottom gradient.
+    private func fillVertical(_ rect: CGRect, with gradient: CGGradient, in context: CGContext) {
+        guard rect.width > 0, rect.height > 0 else { return }
+        context.saveGState()
+        context.clip(to: rect)
+        context.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: rect.midX, y: rect.minY),
+            end: CGPoint(x: rect.midX, y: rect.maxY),
+            options: []
+        )
+        context.restoreGState()
+    }
+
+    private func drawLabel(_ text: String, in frame: CGRect, above lip: CGFloat) {
+        let fontSize = min(14, max(9, frame.width * 0.24))
+        var font = UIFont.systemFont(ofSize: fontSize, weight: .medium)
+        if let rounded = font.fontDescriptor.withDesign(.rounded) {
+            font = UIFont(descriptor: rounded, size: fontSize)
+        }
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize, weight: .medium),
-            .foregroundColor: UIColor(white: 0.45, alpha: 1),
+            .font: font,
+            .foregroundColor: PianoTheme.labelUI,
         ]
         let string = NSAttributedString(string: text, attributes: attributes)
         let size = string.size()
-        string.draw(at: CGPoint(x: frame.midX - size.width / 2, y: frame.maxY - size.height - 8))
+        string.draw(at: CGPoint(x: frame.midX - size.width / 2, y: frame.maxY - lip - size.height - 6))
     }
 }

@@ -21,10 +21,11 @@ This overrides assumption 2 below.
 
 | Phase | Status |
 | --- | --- |
-| 0. Setup | Done in the repo: Xcode project, `PianoCore` package, `.gitignore`. Needs a first build on the Mac. |
+| 0. Setup | Done. Builds and runs on the Mac (iPhone Duo simulator). |
 | 1. Sound | Code written (`PianoEngine`). Piano sound built: `PianoApp/Piano.sf2`, 64.7 MB, checked with FluidSynth. Not yet compiled or heard through AVAudioUnitSampler. |
 | 2. Keyboard | Code written. Key-layout and touch logic: 30 unit tests passing (`swift test`). The UIKit view isn't compiled yet. |
 | 3. iPhone Duo layout | Fold alignment, gap, and laptop pose done and tested in `PianoCore`. Hooked to `reservedRegions` in `DuoSupport.swift`. Needs simulator and device testing. |
+| Look and feel | Instrument styling (lacquer body, red felt, ivory and glossy black keys, amber glow) and rising note trails above the keys. Fold layout now fills both sides and prefers ranges starting on C or F. |
 | 4. Hinge lid | Code written, off by default. Needs a check of the angle direction in the simulator. |
 
 ### Paid release: business setup (do any time)

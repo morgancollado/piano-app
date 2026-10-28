@@ -39,8 +39,11 @@ struct RootView: View {
                     }
                 }
         }
+        // The instrument is always dark, like a piano's black lacquer.
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showingSettings) {
             SettingsScreen()
+                .preferredColorScheme(.dark)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {

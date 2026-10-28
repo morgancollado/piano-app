@@ -10,6 +10,11 @@ final class PlaySession {
     let engine = PianoEngine()
 
     private(set) var soundingNotes: Set<Note> = []
+    /// Light trails for the notes being played, drawn above the keys.
+    private(set) var trails = NoteTrails()
+    @ObservationIgnored private var pruneTask: Task<Void, Never>?
+    /// Taller than any trail area, so a pruned trail is always off screen.
+    private static let trailHeight = 1_200.0
 
     /// Where the keyboard starts. The layout may move it by a few keys to line up with the fold.
     var preferredLowestNote: Note {
@@ -72,15 +77,33 @@ final class PlaySession {
     }
 
     func handle(_ events: [NoteEvent]) {
+        let now = Date.timeIntervalSinceReferenceDate
         for event in events {
             switch event.kind {
             case .on:
                 engine.noteOn(event.note, velocity: event.velocity)
                 soundingNotes.insert(event.note)
+                trails.noteOn(event.note, velocity: event.velocity, at: now)
             case .off:
                 engine.noteOff(event.note)
                 soundingNotes.remove(event.note)
+                trails.noteOff(event.note, at: now)
             }
+        }
+        scheduleTrailCleanup()
+    }
+
+    /// Removes trails once they've risen off screen, so the trail view can stop animating.
+    private func scheduleTrailCleanup() {
+        pruneTask?.cancel()
+        let now = Date.timeIntervalSinceReferenceDate
+        trails.prune(at: now, height: Self.trailHeight)
+        // While a note is held there's nothing to schedule; its release calls this again.
+        guard let wait = trails.secondsUntilClear(at: now, height: Self.trailHeight) else { return }
+        pruneTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait + 0.05))
+            guard !Task.isCancelled, let self else { return }
+            self.trails.prune(at: Date.timeIntervalSinceReferenceDate, height: Self.trailHeight)
         }
     }
 
