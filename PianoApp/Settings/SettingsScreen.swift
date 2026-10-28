@@ -41,8 +41,8 @@ struct SettingsScreen: View {
                 } header: {
                     Text("Sound")
                 } footer: {
-                    if !session.engine.hasPianoSamples {
-                        Text("Using a placeholder tone until the piano samples are added.")
+                    if let status = session.engine.statusMessage {
+                        Text(status)
                     }
                 }
 

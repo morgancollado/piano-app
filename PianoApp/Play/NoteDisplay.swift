@@ -5,6 +5,8 @@ import SwiftUI
 struct NoteDisplay: View {
     let notes: Set<Note>
     let range: ClosedRange<Note>?
+    /// Shown when sound isn't working, so a silent keyboard is never a mystery.
+    var soundStatus: String? = nil
 
     var body: some View {
         VStack(spacing: 8) {
@@ -19,6 +21,13 @@ struct NoteDisplay: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+
+            if let soundStatus {
+                Label(soundStatus, systemImage: "speaker.slash")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding(.horizontal)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -27,5 +36,9 @@ struct NoteDisplay: View {
 }
 
 #Preview {
-    NoteDisplay(notes: [.middleC, Note(midiNumber: 64)], range: Note.middleC...Note(midiNumber: 83))
+    NoteDisplay(
+        notes: [.middleC, Note(midiNumber: 64)],
+        range: Note.middleC...Note(midiNumber: 83),
+        soundStatus: "Sound isn't working: example"
+    )
 }

@@ -20,7 +20,11 @@ struct PlayScreen: View {
 
             ZStack {
                 if let content = surface.contentRect {
-                    NoteDisplay(notes: session.soundingNotes, range: layout.noteRange)
+                    NoteDisplay(
+                        notes: session.soundingNotes,
+                        range: layout.noteRange,
+                        soundStatus: session.engine.statusMessage
+                    )
                         .frame(width: content.width, height: content.height)
                         .position(x: content.midX, y: content.midY)
                 }
