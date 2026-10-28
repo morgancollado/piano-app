@@ -8,15 +8,18 @@ struct NoteDisplay: View {
     /// Shown when sound isn't working, so a silent keyboard is never a mystery.
     var soundStatus: String? = nil
 
+    /// Follows the Dynamic Type setting; the note line still shrinks to fit its width.
+    @ScaledMetric(relativeTo: .largeTitle) private var noteSize: CGFloat = 46
+
     var body: some View {
         VStack(spacing: 8) {
             Text(notes.isEmpty ? " " : notes.sorted().map(\.name).joined(separator: "  "))
-                .font(.system(size: 46, weight: .medium, design: .rounded))
+                .font(.system(size: noteSize, weight: .medium, design: .rounded))
                 .foregroundStyle(PianoTheme.noteText)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.4)
-                .shadow(color: .black.opacity(0.6), radius: 8)
+                .shadow(color: PianoTheme.noteTextShadow, radius: 8)
 
             if let range {
                 Text("\(range.lowerBound.name) – \(range.upperBound.name)")
@@ -27,7 +30,7 @@ struct NoteDisplay: View {
             if let soundStatus {
                 Label(soundStatus, systemImage: "speaker.slash")
                     .font(.footnote)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(PianoTheme.soundWarning)
                     .multilineTextAlignment(.center)
             }
         }

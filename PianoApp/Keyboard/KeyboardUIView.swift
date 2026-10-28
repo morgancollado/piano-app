@@ -26,6 +26,11 @@ final class KeyboardUIView: UIView {
         isAccessibilityElement = true
         accessibilityTraits = .allowsDirectInteraction
         accessibilityLabel = String(localized: "Piano keyboard")
+
+        // Note names follow the Dynamic Type setting, so redraw when it changes.
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: KeyboardUIView, _: UITraitCollection) in
+            view.setNeedsDisplay()
+        }
     }
 
     @available(*, unavailable)
@@ -159,7 +164,7 @@ final class KeyboardUIView: UIView {
         context.setShadow(
             offset: CGSize(width: 0, height: pressed ? 1.5 : 4),
             blur: pressed ? 3 : 7,
-            color: UIColor.black.withAlphaComponent(0.5).cgColor
+            color: PianoTheme.blackKeyShadowUI.cgColor
         )
         PianoTheme.blackSideUI.setFill()
         body.fill()
@@ -211,7 +216,10 @@ final class KeyboardUIView: UIView {
     }
 
     private func drawLabel(_ text: String, in frame: CGRect, above lip: CGFloat) {
-        let fontSize = min(14, max(9, frame.width * 0.24))
+        // Sized to the key, scaled by the Dynamic Type setting, and capped so it stays on the key.
+        let base = min(14, max(9, frame.width * 0.24))
+        let scaled = UIFontMetrics(forTextStyle: .caption1).scaledValue(for: base, compatibleWith: traitCollection)
+        let fontSize = min(scaled, frame.width * 0.45)
         var font = UIFont.systemFont(ofSize: fontSize, weight: .medium)
         if let rounded = font.fontDescriptor.withDesign(.rounded) {
             font = UIFont(descriptor: rounded, size: fontSize)

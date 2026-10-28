@@ -17,6 +17,10 @@ enum PianoTheme {
     ]
 
     static let noteText = Color(red: 0.953, green: 0.933, blue: 0.890)
+    /// Keeps the large note names readable over bright trails.
+    static let noteTextShadow = Color.black.opacity(0.6)
+    /// The "sound isn't working" line.
+    static let soundWarning = Color.orange
 
     // MARK: Felt strip above the keys
 
@@ -41,6 +45,8 @@ enum PianoTheme {
     // MARK: Black keys
 
     static let blackSideUI = rgb(0x050506)
+    /// Shadow a black key casts onto the white keys.
+    static let blackKeyShadowUI = UIColor.black.withAlphaComponent(0.5)
     static let blackTop = gradient(
         [rgb(0x2A2A30), rgb(0x18181C), rgb(0x2C2C33), rgb(0x1B1B1F)],
         locations: [0, 0.55, 0.93, 1]
