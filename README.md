@@ -23,6 +23,10 @@ Packages/PianoCore/       Pure Swift logic with unit tests: notes, key layout, f
 
 ## Run it on your Mac
 
+0. The piano sound is stored with [Git LFS](https://git-lfs.com). Install it once
+   (`brew install git-lfs`, then `git lfs install`) before cloning. In a clone made without
+   it, run `git lfs pull`. Without it, `Piano.sf2` is a small text file and the app shows
+   "Piano sound didn't load" with a placeholder tone.
 1. Open `PianoApp.xcodeproj` in Xcode 27.1 or later.
 2. Select the **PianoApp** target → **Signing & Capabilities** → choose your team.
 3. Pick a simulator (try **iPhone Duo**) or your device and press Run.
@@ -50,4 +54,6 @@ The same tests run in Xcode if you open `Packages/PianoCore/Package.swift`.
 `tools/soundfont/build_salamander_sf2.py` rebuilds `Piano.sf2` from the original recordings
 (needs Python 3 and numpy). `tools/soundfont/check_soundfont.py` checks the result
 (also needs FluidSynth). Steps are in [docs/SOUND_LICENSING.md](docs/SOUND_LICENSING.md).
-Avoid committing rebuilds often: each version adds ~65 MB to the git history.
+`Piano.sf2` is stored with Git LFS, so a rebuild doesn't add another 65 MB to the git history.
+It still counts against the repository's LFS storage, so commit rebuilds only when the sound
+changes.
