@@ -10,11 +10,14 @@ private let log = Logger(subsystem: "com.morgancollado.piano", category: "audio"
 ///
 /// Signal chain: sampler → EQ (tone / "lid") → reverb → output.
 ///
-/// Start-up order matters: configure and activate the audio session, then start the engine,
-/// then load `Piano.sf2` into the running sampler. Session activation and the sound bank load
-/// both run off the main thread, because each can take a noticeable time. Every step logs to
-/// the Xcode console under the "audio" category, and failures are shown on screen through
-/// `statusMessage`.
+/// Start-up order matters: configure and activate the audio session (off the main thread,
+/// because activation can block), then start the engine, then load `Piano.sf2` into the
+/// running sampler. Every step logs to the Xcode console under the "audio" category, and
+/// failures are shown on screen through `statusMessage`.
+///
+/// The sound bank loads on the main thread. Loading it on a background thread while the
+/// engine runs crashed inside `loadSoundBankInstrument` on device (iOS 27.2), so don't move
+/// it off the main thread without testing on a device.
 ///
 /// A start can be overtaken by a pause, an interruption or a restart. Each start carries a
 /// generation number, and a start whose number is out of date stops at its next step, so an
@@ -69,9 +72,8 @@ final class PianoEngine {
     @ObservationIgnored private var tone = AVAudioUnitEQ(numberOfBands: 1)
     @ObservationIgnored private var reverb = AVAudioUnitReverb()
     @ObservationIgnored private var graphBuilt = false
-    /// The load of `Piano.sf2` into the current sampler. Kept so overlapping starts wait for
-    /// the same load instead of loading twice.
-    @ObservationIgnored private var soundLoad: Task<SoundLoadResult, Never>?
+    /// Whether `Piano.sf2` has been loaded (or tried) into the current sampler.
+    @ObservationIgnored private var soundLoaded = false
 
     /// Bumped whenever a start in progress should give up.
     @ObservationIgnored private var startGeneration = 0
@@ -143,9 +145,8 @@ final class PianoEngine {
             return
         }
 
-        let loadResult = await loadPianoSound()
-        guard isCurrent(generation) else { return }
-        apply(loadResult)
+        // Synchronous on the main actor, so nothing can pause or restart in between.
+        loadPianoSoundIfNeeded()
         // A fresh sampler starts with the pedal up; match the toolbar.
         sendSustain()
         state = .ready
@@ -221,43 +222,14 @@ final class PianoEngine {
 
     // MARK: - Piano sound
 
-    /// Outcome of loading `Piano.sf2`, passed back from the background load.
-    nonisolated enum SoundLoadResult: Sendable {
-        case loaded(seconds: Double)
-        case failed(message: String, details: String)
-    }
-
-    /// Hands the sampler to the background task that loads the sound bank.
-    ///
-    /// `@unchecked` because `AVAudioUnitSampler` isn't marked Sendable. It's safe here: only
-    /// that task configures the sampler while it loads, and the note and controller messages
-    /// the main thread may send meanwhile are MIDI events, which the sampler accepts from any
-    /// thread.
-    nonisolated private struct SamplerHandle: @unchecked Sendable {
-        let sampler: AVAudioUnitSampler
-    }
-
-    /// Loads `Piano.sf2` into the current sampler, once. The ~65 MB load runs off the main
-    /// thread so the keyboard and toolbar stay responsive.
-    private func loadPianoSound() async -> SoundLoadResult {
-        if let soundLoad {
-            return await soundLoad.value
+    private func loadPianoSoundIfNeeded() {
+        guard !soundLoaded else { return }
+        soundLoaded = true
+        guard let url = Bundle.main.url(forResource: "Piano", withExtension: "sf2") else {
+            soundLoadError = String(localized: "Piano.sf2 isn't in the app bundle")
+            log.error("Piano.sf2 not found in the app bundle")
+            return
         }
-        let task: Task<SoundLoadResult, Never>
-        if let url = Bundle.main.url(forResource: "Piano", withExtension: "sf2") {
-            let handle = SamplerHandle(sampler: sampler)
-            task = Task.detached(priority: .userInitiated) {
-                Self.loadSoundBank(at: url, into: handle.sampler)
-            }
-        } else {
-            let message = String(localized: "Piano.sf2 isn't in the app bundle")
-            task = Task { .failed(message: message, details: "Piano.sf2 not found in the app bundle") }
-        }
-        soundLoad = task
-        return await task.value
-    }
-
-    nonisolated private static func loadSoundBank(at url: URL, into sampler: AVAudioUnitSampler) -> SoundLoadResult {
         let started = Date()
         do {
             try sampler.loadSoundBankInstrument(
@@ -266,23 +238,14 @@ final class PianoEngine {
                 bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB)
             )
-            return .loaded(seconds: Date().timeIntervalSince(started))
-        } catch {
-            return .failed(message: error.localizedDescription, details: String(describing: error))
-        }
-    }
-
-    private func apply(_ result: SoundLoadResult) {
-        switch result {
-        case .loaded(let seconds):
-            if !hasPianoSamples {
-                log.notice("Loaded Piano.sf2 in \(seconds, format: .fixed(precision: 2)) s")
-            }
             hasPianoSamples = true
             soundLoadError = nil
-        case .failed(let message, let details):
+            let seconds = Date().timeIntervalSince(started)
+            log.notice("Loaded Piano.sf2 in \(seconds, format: .fixed(precision: 2)) s")
+        } catch {
             hasPianoSamples = false
-            soundLoadError = message
+            soundLoadError = error.localizedDescription
+            let details = String(describing: error)
             log.error("Couldn't load Piano.sf2: \(details, privacy: .public)")
         }
     }
@@ -381,7 +344,7 @@ final class PianoEngine {
         tone = AVAudioUnitEQ(numberOfBands: 1)
         reverb = AVAudioUnitReverb()
         graphBuilt = false
-        soundLoad = nil
+        soundLoaded = false
         hasPianoSamples = false
         soundLoadError = nil
         applyTone()
