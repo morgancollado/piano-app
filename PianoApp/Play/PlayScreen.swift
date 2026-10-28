@@ -51,7 +51,7 @@ private struct PlaySurface: View {
             preferredLowestNote: preferredLowestNote
         )
         let trailClearDistance = NoteTrailsView.clearDistance(
-            areaHeight: surface.trailsRect?.height ?? 0,
+            areaHeight: Double(surface.trailsRect?.height ?? 0),
             reduceMotion: reduceMotion
         )
 
