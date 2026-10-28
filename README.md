@@ -27,6 +27,12 @@ Packages/PianoCore/       Pure Swift logic with unit tests: notes, key layout, f
 2. Select the **PianoApp** target → **Signing & Capabilities** → choose your team.
 3. Pick a simulator (try **iPhone Duo**) or your device and press Run.
 
+Running on your own iPhone works without the paid Developer Program: sign in with your
+Apple ID under Xcode → Settings → Accounts, pick your **Personal Team** in Signing &
+Capabilities, connect the phone by USB-C, turn on Developer Mode (Settings → Privacy &
+Security), and trust the developer profile on first launch (Settings → General →
+VPN & Device Management). Free installs stop opening after 7 days; press Run again to renew.
+
 The piano sound is `PianoApp/Piano.sf2` (Salamander Grand Piano, public domain). How it was
 built and checked: [docs/SOUND_LICENSING.md](docs/SOUND_LICENSING.md).
 

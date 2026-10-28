@@ -8,7 +8,7 @@ Status: in progress, 2026-10-27. Device and API facts are in
 | Question | Answer |
 | --- | --- |
 | Mac and Xcode | Yes. Mac being updated to macOS 27.2. |
-| Apple Developer Program | Yes, paid account. |
+| Apple Developer Program | Not yet. Testing on the iPhone Duo with a free Personal Team (apps expire after 7 days). The paid membership ($99/year) is needed before TestFlight and the App Store. |
 | iPhone Duo for testing | Yes. |
 | Goal | **Paid App Store release.** |
 | iOS support | **Any iPhone on iOS 18 or later**, optimized for iPhone Duo. The iPhone Duo APIs switch on only on iOS 27.1+. All of them live in `PianoApp/Duo/DuoSupport.swift`. |
