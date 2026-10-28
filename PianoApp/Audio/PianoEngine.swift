@@ -230,6 +230,21 @@ final class PianoEngine {
             log.error("Piano.sf2 not found in the app bundle")
             return
         }
+        // The sampler's loader aborts the app on some bad files instead of throwing, so check
+        // the header first. A Git LFS pointer here means the clone was made without Git LFS.
+        let prefix = (try? FileHandle(forReadingFrom: url).read(upToCount: SoundFontFile.prefixLength)) ?? Data()
+        switch SoundFontFile.problem(withPrefix: prefix) {
+        case .gitLFSPointer:
+            soundLoadError = String(localized: "Piano.sf2 is a Git LFS placeholder. Install Git LFS, run git lfs pull, and build again.")
+            log.error("Piano.sf2 is a Git LFS pointer, not the SoundFont")
+            return
+        case .notASoundFont:
+            soundLoadError = String(localized: "Piano.sf2 isn't a SoundFont file")
+            log.error("Piano.sf2 doesn't have a SoundFont header")
+            return
+        case nil:
+            break
+        }
         let started = Date()
         do {
             try sampler.loadSoundBankInstrument(
