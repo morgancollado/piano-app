@@ -162,6 +162,70 @@ struct KeyboardLayoutTests {
         let layout = KeyboardLayout(size: .zero)
         #expect(layout.whiteKeys.isEmpty)
         #expect(layout.key(at: .zero) == nil)
+        #expect(layout.startNote(shiftedByOctaves: 1) == nil)
+    }
+
+    @Test func keyFramesAreShiftedSideways() throws {
+        let layout = KeyboardLayout(size: CGSize(width: 600, height: 200), targetWhiteKeyWidth: 60)
+        let frames = layout.keyFrames(shiftedBy: -100)
+        #expect(frames.count == layout.whiteKeys.count + layout.blackKeys.count)
+        let c4 = try #require(frames[.middleC])
+        #expect(c4.minX == -100)
+        #expect(c4.width == 60)
+    }
+}
+
+struct OctaveShiftTests {
+    /// 14 white keys at the default width.
+    let twoOctaves = CGSize(width: 840, height: 200)
+
+    @Test func shiftsByAnOctaveInTheMiddle() throws {
+        let layout = KeyboardLayout(size: twoOctaves, preferredLowestNote: .middleC)
+        let up = try #require(layout.startNote(shiftedByOctaves: 1))
+        let down = try #require(layout.startNote(shiftedByOctaves: -1))
+        #expect(up.name == "C5")
+        #expect(down.name == "C3")
+    }
+
+    @Test func upIsUnavailableWhenTheShownKeysReachTheTop() {
+        // C6 to B7: one more octave would run past C8, so the layout would clamp back to C6.
+        let layout = KeyboardLayout(size: twoOctaves, preferredLowestNote: Note(midiNumber: 84))
+        #expect(layout.lowestNote?.name == "C6")
+        #expect(layout.startNote(shiftedByOctaves: 1) == nil)
+        #expect(layout.startNote(shiftedByOctaves: -1)?.name == "C5")
+    }
+
+    @Test func usesTheShownRangeNotTheSavedStart() throws {
+        // A saved start too high for this many keys is shown an octave lower already.
+        let layout = KeyboardLayout(size: twoOctaves, preferredLowestNote: Note(midiNumber: 96))
+        #expect(layout.lowestNote?.name == "C6")
+        #expect(layout.startNote(shiftedByOctaves: 1) == nil)
+        // Octave Down moves what's on screen, rather than only undoing the hidden clamp.
+        let down = try #require(layout.startNote(shiftedByOctaves: -1))
+        let moved = KeyboardLayout(size: twoOctaves, preferredLowestNote: down)
+        #expect(moved.lowestNote?.name == "C5")
+    }
+
+    @Test func downIsUnavailableAtTheBottom() {
+        let layout = KeyboardLayout(size: twoOctaves, preferredLowestNote: Note(midiNumber: 24))
+        #expect(layout.lowestNote?.name == "C1")
+        #expect(layout.startNote(shiftedByOctaves: -1) == nil)
+    }
+
+    @Test func everyAvailableShiftMovesTheFoldLayout() throws {
+        let fold = FoldInfo(centerX: 445, width: 30)
+        let size = CGSize(width: 890, height: 380)
+        for midi in stride(from: 21, through: 108, by: 1) where Note(midiNumber: midi).isWhite {
+            let layout = KeyboardLayout(size: size, fold: fold, preferredLowestNote: Note(midiNumber: midi))
+            let lowest = try #require(layout.lowestNote)
+            for octaves in [-1, 1] {
+                guard let start = layout.startNote(shiftedByOctaves: octaves) else { continue }
+                let moved = KeyboardLayout(size: size, fold: fold, preferredLowestNote: start)
+                let movedLowest = try #require(moved.lowestNote)
+                #expect(octaves > 0 ? movedLowest > lowest : movedLowest < lowest)
+                #expect(moved.highestNote.map { Note.pianoRange.contains($0) } == true)
+            }
+        }
     }
 }
 
@@ -199,5 +263,32 @@ struct PlaySurfaceLayoutTests {
         let fold = try #require(surface.keyboardFold)
         #expect(fold.width == 30)
         #expect(surface.contentRect?.maxX == 430)
+    }
+
+    @Test func bookPoseTrailsCoverKeysOnBothPages() throws {
+        let division = Division(frame: CGRect(x: 430, y: 0, width: 30, height: 626), isActive: true)
+        let surface = PlaySurfaceLayout(size: CGSize(width: 890, height: 626), division: division)
+        let trails = try #require(surface.trailsRect)
+        #expect(trails.width == 890)
+        #expect(trails.maxY == surface.keyboardRect.minY)
+
+        let layout = KeyboardLayout(size: surface.keyboardRect.size, fold: surface.keyboardFold)
+        let frames = layout.keyFrames(shiftedBy: surface.keyboardRect.minX - trails.minX)
+        let rightmost = try #require(layout.whiteKeys.last)
+        let frame = try #require(frames[rightmost.note])
+        #expect(frame.minX > division.frame.maxX - 1)
+        #expect(frame.midX < trails.width)
+    }
+
+    @Test func laptopPoseTrailsMatchTheContentArea() {
+        let division = Division(frame: CGRect(x: 0, y: 430, width: 626, height: 30), isActive: true)
+        let surface = PlaySurfaceLayout(size: CGSize(width: 626, height: 890), division: division)
+        #expect(surface.trailsRect == surface.contentRect)
+    }
+
+    @Test func noTrailsWhenThereIsNoRoomAboveTheKeys() {
+        let surface = PlaySurfaceLayout(size: CGSize(width: 800, height: 150), division: nil)
+        #expect(surface.contentRect == nil)
+        #expect(surface.trailsRect == nil)
     }
 }

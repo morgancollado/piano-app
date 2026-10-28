@@ -43,6 +43,11 @@ public struct KeyboardLayout: Sendable, Equatable {
     public static let whiteKeyWidthRange: ClosedRange<CGFloat> = 44...90
 
     public let size: CGSize
+    public let fold: FoldInfo?
+    /// The requested white key width, after clamping to `whiteKeyWidthRange`.
+    public let targetWhiteKeyWidth: CGFloat
+    private let blackKeyWidthRatio: CGFloat
+    private let blackKeyHeightRatio: CGFloat
     /// Width of the narrowest white key (the two sides of a fold can differ slightly).
     public let whiteKeyWidth: CGFloat
     public let whiteKeys: [PianoKey]
@@ -66,8 +71,12 @@ public struct KeyboardLayout: Sendable, Equatable {
         blackKeyHeightRatio: CGFloat = 0.62
     ) {
         self.size = size
+        self.fold = fold
         let target = min(max(targetWhiteKeyWidth, Self.whiteKeyWidthRange.lowerBound),
                          Self.whiteKeyWidthRange.upperBound)
+        self.targetWhiteKeyWidth = target
+        self.blackKeyWidthRatio = blackKeyWidthRatio
+        self.blackKeyHeightRatio = blackKeyHeightRatio
 
         guard size.width > 0, size.height > 0 else {
             whiteKeyWidth = 0
@@ -148,6 +157,36 @@ public struct KeyboardLayout: Sendable, Equatable {
 
     public func key(for note: Note) -> PianoKey? {
         (note.isBlack ? blackKeys : whiteKeys).first { $0.note == note }
+    }
+
+    /// Every key's frame moved sideways by `dx`, for drawing in another view's coordinates.
+    public func keyFrames(shiftedBy dx: CGFloat = 0) -> [Note: CGRect] {
+        var frames: [Note: CGRect] = [:]
+        frames.reserveCapacity(whiteKeys.count + blackKeys.count)
+        for key in whiteKeys + blackKeys {
+            frames[key.note] = key.frame.offsetBy(dx: dx, dy: 0)
+        }
+        return frames
+    }
+
+    /// The preferred lowest note that moves these keys `octaves` octaves up (or down when
+    /// negative), or nil when they can't move that way because the end of the piano is in
+    /// the way. It lays the keys out again from the shown range, so an Octave button is
+    /// enabled only when pressing it changes what's on screen.
+    public func startNote(shiftedByOctaves octaves: Int) -> Note? {
+        guard octaves != 0, let lowest = lowestNote,
+              let target = lowest.transposed(by: 12 * octaves) else { return nil }
+        let moved = KeyboardLayout(
+            size: size,
+            fold: fold,
+            targetWhiteKeyWidth: targetWhiteKeyWidth,
+            preferredLowestNote: target,
+            blackKeyWidthRatio: blackKeyWidthRatio,
+            blackKeyHeightRatio: blackKeyHeightRatio
+        )
+        guard let movedLowest = moved.lowestNote else { return nil }
+        let movedThatWay = octaves > 0 ? movedLowest > lowest : movedLowest < lowest
+        return movedThatWay ? target : nil
     }
 
     /// How far down the key a point is: 0 at the top edge, 1 at the bottom edge.

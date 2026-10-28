@@ -21,15 +21,19 @@ public struct Division: Sendable, Equatable {
     public var runsVertically: Bool { frame.height > frame.width }
 }
 
-/// Splits the play screen into an optional content area (note names, later sheet music)
-/// and the keyboard area.
+/// Splits the play screen into an optional content area (note names, later sheet music),
+/// the area where light trails rise, and the keyboard area.
 ///
-/// - Laptop pose (fold active and running side to side): content on the top half,
+/// - Laptop pose (fold active and running side to side): content and trails on the top half,
 ///   keys on the bottom half, as Apple's design guidelines suggest.
 /// - Everything else: keys along the bottom. If a vertical fold crosses the keyboard,
 ///   it is passed on so `KeyboardLayout` can align keys to it.
 public struct PlaySurfaceLayout: Sendable, Equatable {
+    /// Text and controls. Held like a book, this is only the left page, out of the fold.
     public var contentRect: CGRect?
+    /// Where trails rise from the keys. Always spans the full keyboard width, so keys on both
+    /// sides of the fold get trails. Nothing in it is interactive, so it may cross the fold.
+    public var trailsRect: CGRect?
     public var keyboardRect: CGRect
     public var keyboardFold: FoldInfo?
 
@@ -43,6 +47,7 @@ public struct PlaySurfaceLayout: Sendable, Equatable {
         if let division, division.isActive, !division.runsVertically,
            division.frame.minY > 0, division.frame.maxY < size.height {
             contentRect = CGRect(x: 0, y: 0, width: size.width, height: division.frame.minY)
+            trailsRect = contentRect
             keyboardRect = CGRect(x: 0, y: division.frame.maxY,
                                   width: size.width, height: size.height - division.frame.maxY)
             keyboardFold = nil
@@ -54,9 +59,11 @@ public struct PlaySurfaceLayout: Sendable, Equatable {
         keyboardRect = CGRect(x: 0, y: size.height - keyboardHeight, width: size.width, height: keyboardHeight)
 
         let contentHeight = size.height - keyboardHeight
-        var content: CGRect? = contentHeight >= Self.minimumContentHeight
+        let above: CGRect? = contentHeight >= Self.minimumContentHeight
             ? CGRect(x: 0, y: 0, width: size.width, height: contentHeight)
             : nil
+        trailsRect = above
+        var content = above
 
         if let division, division.runsVertically,
            division.frame.midX > 0, division.frame.midX < size.width {

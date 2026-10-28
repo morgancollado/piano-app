@@ -13,8 +13,17 @@ final class PlaySession {
     /// Light trails for the notes being played, drawn above the keys.
     private(set) var trails = NoteTrails()
     @ObservationIgnored private var pruneTask: Task<Void, Never>?
-    /// Taller than any trail area, so a pruned trail is always off screen.
-    private static let trailHeight = 1_200.0
+    /// How far a released trail rises before it's removed, so the trail view can stop
+    /// animating once nothing is visible. The play screen sets it from the trail area's
+    /// measured height (see `NoteTrailsView.clearDistance`).
+    @ObservationIgnored var trailClearDistance = 1_200.0 {
+        didSet { if trailClearDistance != oldValue { scheduleTrailCleanup() } }
+    }
+
+    /// Where the keyboard would start after Octave Down and Octave Up, or nil when the keys
+    /// can't move that way. Worked out from the keys on screen by `updateOctaveShifts(for:)`.
+    private(set) var octaveDownStart: Note?
+    private(set) var octaveUpStart: Note?
 
     /// Where the keyboard starts. The layout may move it by a few keys to line up with the fold.
     var preferredLowestNote: Note {
@@ -97,25 +106,40 @@ final class PlaySession {
     private func scheduleTrailCleanup() {
         pruneTask?.cancel()
         let now = Date.timeIntervalSinceReferenceDate
-        trails.prune(at: now, height: Self.trailHeight)
+        let distance = trailClearDistance
+        trails.prune(at: now, height: distance)
         // While a note is held there's nothing to schedule; its release calls this again.
-        guard let wait = trails.secondsUntilClear(at: now, height: Self.trailHeight) else { return }
+        guard let wait = trails.secondsUntilClear(at: now, height: distance) else { return }
         pruneTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(wait + 0.05))
             guard !Task.isCancelled, let self else { return }
-            self.trails.prune(at: Date.timeIntervalSinceReferenceDate, height: Self.trailHeight)
+            self.trails.prune(at: Date.timeIntervalSinceReferenceDate, height: self.trailClearDistance)
         }
     }
 
+    /// Call whenever the keyboard on screen changes.
+    func updateOctaveShifts(for layout: KeyboardLayout) {
+        let down = layout.startNote(shiftedByOctaves: -1)
+        let up = layout.startNote(shiftedByOctaves: 1)
+        if down != octaveDownStart { octaveDownStart = down }
+        if up != octaveUpStart { octaveUpStart = up }
+    }
+
     func canShiftOctave(by octaves: Int) -> Bool {
-        guard let shifted = preferredLowestNote.transposed(by: 12 * octaves) else { return false }
-        return shifted >= Note.pianoRange.lowerBound && shifted.midiNumber <= Self.highestStart
+        octaveStart(by: octaves) != nil
     }
 
     func shiftOctave(by octaves: Int) {
-        guard canShiftOctave(by: octaves),
-              let shifted = preferredLowestNote.transposed(by: 12 * octaves) else { return }
-        preferredLowestNote = shifted
+        guard let start = octaveStart(by: octaves) else { return }
+        preferredLowestNote = start
+    }
+
+    private func octaveStart(by octaves: Int) -> Note? {
+        switch octaves {
+        case -1: octaveDownStart
+        case 1: octaveUpStart
+        default: nil
+        }
     }
 
     private func applyTone() {
@@ -123,9 +147,6 @@ final class PlaySession {
             manual: toneBrightness, hinge: hinge, enabled: hingeControlsTone
         )
     }
-
-    /// C7: the highest start that still leaves room for an octave on an 88-key piano.
-    private static let highestStart = 96
 
     private enum Keys {
         static let lowestNote = "lowestNote"
