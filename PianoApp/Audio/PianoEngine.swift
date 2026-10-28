@@ -10,10 +10,15 @@ private let log = Logger(subsystem: "com.morgancollado.piano", category: "audio"
 ///
 /// Signal chain: sampler → EQ (tone / "lid") → reverb → output.
 ///
-/// Start-up order matters: configure and activate the audio session (off the main thread,
-/// because activation can block), then start the engine, then load `Piano.sf2` into the
-/// running sampler. Every step logs to the Xcode console under the "audio" category, and
-/// failures are shown on screen through `statusMessage`.
+/// Start-up order matters: configure and activate the audio session, then start the engine,
+/// then load `Piano.sf2` into the running sampler. Session activation and the sound bank load
+/// both run off the main thread, because each can take a noticeable time. Every step logs to
+/// the Xcode console under the "audio" category, and failures are shown on screen through
+/// `statusMessage`.
+///
+/// A start can be overtaken by a pause, an interruption or a restart. Each start carries a
+/// generation number, and a start whose number is out of date stops at its next step, so an
+/// old start never restarts the engine after the app has paused it.
 @MainActor
 @Observable
 final class PianoEngine {
@@ -44,7 +49,7 @@ final class PianoEngine {
     }
 
     var sustainOn = false {
-        didSet { sampler.sendController(Self.sustainController, withValue: sustainOn ? 127 : 0, onChannel: 0) }
+        didSet { sendSustain() }
     }
 
     /// 0 is dark and soft, 1 is fully bright.
@@ -54,91 +59,138 @@ final class PianoEngine {
 
     /// 0 is dry, 1 is all reverb.
     var reverbMix: Double = 0.15 {
-        didSet { reverb.wetDryMix = Float(min(max(reverbMix, 0), 1) * 100) }
+        didSet { applyReverbMix() }
     }
 
-    @ObservationIgnored private let engine = AVAudioEngine()
-    @ObservationIgnored private let sampler = AVAudioUnitSampler()
-    @ObservationIgnored private let tone = AVAudioUnitEQ(numberOfBands: 1)
-    @ObservationIgnored private let reverb = AVAudioUnitReverb()
-    @ObservationIgnored private var observers: [any NSObjectProtocol] = []
+    // The engine and its nodes are replaced when the system resets its media services,
+    // because the reset leaves the old ones unusable.
+    @ObservationIgnored private var engine = AVAudioEngine()
+    @ObservationIgnored private var sampler = AVAudioUnitSampler()
+    @ObservationIgnored private var tone = AVAudioUnitEQ(numberOfBands: 1)
+    @ObservationIgnored private var reverb = AVAudioUnitReverb()
     @ObservationIgnored private var graphBuilt = false
-    @ObservationIgnored private var soundLoaded = false
+    /// The load of `Piano.sf2` into the current sampler. Kept so overlapping starts wait for
+    /// the same load instead of loading twice.
+    @ObservationIgnored private var soundLoad: Task<SoundLoadResult, Never>?
+
+    /// Bumped whenever a start in progress should give up.
+    @ObservationIgnored private var startGeneration = 0
+    /// True between `start()` and `pause()`. System events only restart sound while it's true,
+    /// so a route change or reset in the background doesn't start the engine there.
+    @ObservationIgnored private var wantsSound = false
+
+    @ObservationIgnored private var sessionObservers: [any NSObjectProtocol] = []
+    @ObservationIgnored private var engineObserver: (any NSObjectProtocol)?
 
     private static let sustainController: UInt8 = 64
+    /// MIDI "All Sound Off": silences every voice at once, release tails included.
+    private static let allSoundOffController: UInt8 = 120
     /// Requested hardware buffer. 5 ms keeps touch-to-sound delay low.
     nonisolated private static let preferredBufferDuration: TimeInterval = 0.005
 
     init() {
         applyTone()
-        reverb.wetDryMix = Float(reverbMix * 100)
-        observeSystemEvents()
+        applyReverbMix()
+        observeSessionEvents()
+        observeEngineConfiguration()
     }
 
     // MARK: - Lifecycle
 
     func start() {
+        wantsSound = true
         guard state != .starting else { return }
         if state == .ready, engine.isRunning { return }
         state = .starting
-
-        Task {
-            // Session activation can block for a while, so it runs off the main thread.
-            let sessionResult = await Task.detached(priority: .userInitiated) {
-                Result { try Self.configureSession() }
-            }.value
-
-            switch sessionResult {
-            case .failure(let error):
-                fail("audio session: \(error.localizedDescription)")
-                return
-            case .success(let info):
-                log.notice("Audio session active: \(info, privacy: .public)")
-            }
-
-            buildGraphIfNeeded()
-            do {
-                if !engine.isRunning {
-                    try engine.start()
-                }
-                let format = engine.outputNode.outputFormat(forBus: 0).description
-                log.notice("Engine running, output format \(format, privacy: .public)")
-            } catch {
-                fail("engine: \(error.localizedDescription)")
-                return
-            }
-
-            loadPianoSoundIfNeeded()
-            state = .ready
-        }
+        startGeneration += 1
+        let generation = startGeneration
+        Task { await runStart(generation: generation) }
     }
 
     func pause() {
+        wantsSound = false
+        cancelPendingStart()
         allNotesOff()
         engine.pause()
         state = .idle
         log.notice("Engine paused")
     }
 
+    private func runStart(generation: Int) async {
+        // Session activation can block for a while, so it runs off the main thread.
+        let sessionResult = await Task.detached(priority: .userInitiated) {
+            Result { try Self.configureSession() }
+        }.value
+        guard isCurrent(generation) else { return }
+
+        switch sessionResult {
+        case .failure(let error):
+            fail("audio session: \(error.localizedDescription)")
+            return
+        case .success(let info):
+            log.notice("Audio session active: \(info, privacy: .public)")
+        }
+
+        buildGraphIfNeeded()
+        do {
+            if !engine.isRunning {
+                try engine.start()
+            }
+            let format = engine.outputNode.outputFormat(forBus: 0).description
+            log.notice("Engine running, output format \(format, privacy: .public)")
+        } catch {
+            fail("engine: \(error.localizedDescription)")
+            return
+        }
+
+        let loadResult = await loadPianoSound()
+        guard isCurrent(generation) else { return }
+        apply(loadResult)
+        // A fresh sampler starts with the pedal up; match the toolbar.
+        sendSustain()
+        state = .ready
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        if generation == startGeneration { return true }
+        log.notice("A newer pause or restart replaced this start; stopping it")
+        return false
+    }
+
+    private func cancelPendingStart() {
+        startGeneration += 1
+    }
+
     // MARK: - Notes
 
     func noteOn(_ note: Note, velocity: UInt8) {
-        if state != .ready {
+        // Until the piano sound has loaded the sampler only has a placeholder tone, and the
+        // status line already says sound is starting, so presses stay silent.
+        guard state == .ready else {
             let current = String(describing: state)
             log.error("Note \(note.name, privacy: .public) pressed but sound isn't ready (\(current, privacy: .public))")
+            return
         }
         sampler.startNote(note.midiByte, withVelocity: velocity, onChannel: 0)
         log.debug("Note on \(note.name, privacy: .public) velocity \(velocity)")
     }
 
     func noteOff(_ note: Note) {
+        // Always sent, whatever the state, so no note can be left on.
         sampler.stopNote(note.midiByte, onChannel: 0)
     }
 
+    /// Silences everything, including notes held by the sustain pedal.
     func allNotesOff() {
+        // The sampler ignores note-offs while the pedal is down, so lift it first.
+        sampler.sendController(Self.sustainController, withValue: 0, onChannel: 0)
         for number in UInt8(0)...UInt8(127) {
             sampler.stopNote(number, onChannel: 0)
         }
+        // Also cut release tails, so nothing is still sounding when the engine resumes.
+        sampler.sendController(Self.allSoundOffController, withValue: 0, onChannel: 0)
+        // Put the pedal back where the toolbar shows it, for the notes played next.
+        sendSustain()
     }
 
     // MARK: - Setup
@@ -163,18 +215,49 @@ final class PianoEngine {
         engine.connect(tone, to: reverb, format: nil)
         engine.connect(reverb, to: engine.mainMixerNode, format: nil)
         reverb.loadFactoryPreset(.mediumHall)
-        reverb.wetDryMix = Float(reverbMix * 100)
+        applyReverbMix()
         graphBuilt = true
     }
 
-    private func loadPianoSoundIfNeeded() {
-        guard !soundLoaded else { return }
-        soundLoaded = true
-        guard let url = Bundle.main.url(forResource: "Piano", withExtension: "sf2") else {
-            soundLoadError = String(localized: "Piano.sf2 isn't in the app bundle")
-            log.error("Piano.sf2 not found in the app bundle")
-            return
+    // MARK: - Piano sound
+
+    /// Outcome of loading `Piano.sf2`, passed back from the background load.
+    nonisolated enum SoundLoadResult: Sendable {
+        case loaded(seconds: Double)
+        case failed(message: String, details: String)
+    }
+
+    /// Hands the sampler to the background task that loads the sound bank.
+    ///
+    /// `@unchecked` because `AVAudioUnitSampler` isn't marked Sendable. It's safe here: only
+    /// that task configures the sampler while it loads, and the note and controller messages
+    /// the main thread may send meanwhile are MIDI events, which the sampler accepts from any
+    /// thread.
+    nonisolated private struct SamplerHandle: @unchecked Sendable {
+        let sampler: AVAudioUnitSampler
+    }
+
+    /// Loads `Piano.sf2` into the current sampler, once. The ~65 MB load runs off the main
+    /// thread so the keyboard and toolbar stay responsive.
+    private func loadPianoSound() async -> SoundLoadResult {
+        if let soundLoad {
+            return await soundLoad.value
         }
+        let task: Task<SoundLoadResult, Never>
+        if let url = Bundle.main.url(forResource: "Piano", withExtension: "sf2") {
+            let handle = SamplerHandle(sampler: sampler)
+            task = Task.detached(priority: .userInitiated) {
+                Self.loadSoundBank(at: url, into: handle.sampler)
+            }
+        } else {
+            let message = String(localized: "Piano.sf2 isn't in the app bundle")
+            task = Task { .failed(message: message, details: "Piano.sf2 not found in the app bundle") }
+        }
+        soundLoad = task
+        return await task.value
+    }
+
+    nonisolated private static func loadSoundBank(at url: URL, into sampler: AVAudioUnitSampler) -> SoundLoadResult {
         let started = Date()
         do {
             try sampler.loadSoundBankInstrument(
@@ -183,14 +266,23 @@ final class PianoEngine {
                 bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
                 bankLSB: UInt8(kAUSampler_DefaultBankLSB)
             )
+            return .loaded(seconds: Date().timeIntervalSince(started))
+        } catch {
+            return .failed(message: error.localizedDescription, details: String(describing: error))
+        }
+    }
+
+    private func apply(_ result: SoundLoadResult) {
+        switch result {
+        case .loaded(let seconds):
+            if !hasPianoSamples {
+                log.notice("Loaded Piano.sf2 in \(seconds, format: .fixed(precision: 2)) s")
+            }
             hasPianoSamples = true
             soundLoadError = nil
-            let seconds = Date().timeIntervalSince(started)
-            log.notice("Loaded Piano.sf2 in \(seconds, format: .fixed(precision: 2)) s")
-        } catch {
+        case .failed(let message, let details):
             hasPianoSamples = false
-            soundLoadError = error.localizedDescription
-            let details = String(describing: error)
+            soundLoadError = message
             log.error("Couldn't load Piano.sf2: \(details, privacy: .public)")
         }
     }
@@ -198,6 +290,10 @@ final class PianoEngine {
     private func fail(_ reason: String) {
         state = .failed(reason)
         log.error("Sound failed: \(reason, privacy: .public)")
+    }
+
+    private func sendSustain() {
+        sampler.sendController(Self.sustainController, withValue: sustainOn ? 127 : 0, onChannel: 0)
     }
 
     private func applyTone() {
@@ -210,28 +306,40 @@ final class PianoEngine {
         tone.globalGain = Float(-6 * (1 - value))
     }
 
-    private func observeSystemEvents() {
+    private func applyReverbMix() {
+        reverb.wetDryMix = Float(min(max(reverbMix, 0), 1) * 100)
+    }
+
+    // MARK: - System events
+
+    private func observeSessionEvents() {
         let center = NotificationCenter.default
 
-        observers.append(center.addObserver(
+        sessionObservers.append(center.addObserver(
             forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
         ) { [weak self] notification in
             let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
             MainActor.assumeIsolated { self?.handleInterruption(rawType: rawType) }
         })
 
-        // Headphones plugged in or removed, Bluetooth changes, and similar.
-        observers.append(center.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.restartAfterChange() }
-        })
-
-        observers.append(center.addObserver(
+        sessionObservers.append(center.addObserver(
             forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.restartAfterChange() }
+            MainActor.assumeIsolated { self?.rebuildAfterMediaReset() }
         })
+    }
+
+    /// Headphones plugged in or removed, Bluetooth changes, and similar. Tied to the current
+    /// engine, so it's registered again whenever the engine is replaced.
+    private func observeEngineConfiguration() {
+        if let engineObserver {
+            NotificationCenter.default.removeObserver(engineObserver)
+        }
+        engineObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.restartAfterConfigurationChange() }
+        }
     }
 
     private func handleInterruption(rawType: UInt?) {
@@ -239,20 +347,47 @@ final class PianoEngine {
         switch type {
         case .began:
             log.notice("Audio interrupted")
+            cancelPendingStart()
             allNotesOff()
             state = .idle
         case .ended:
             log.notice("Audio interruption ended")
-            start()
+            if wantsSound { start() }
         @unknown default:
             break
         }
     }
 
-    private func restartAfterChange() {
-        log.notice("Audio configuration changed, restarting the engine")
+    /// The system stopped the engine because the output changed. The engine and nodes are
+    /// still usable, so only a restart is needed.
+    private func restartAfterConfigurationChange() {
+        log.notice("Audio configuration changed")
+        cancelPendingStart()
         allNotesOff()
         state = .idle
-        start()
+        if wantsSound { start() }
+    }
+
+    /// After a media services reset every audio object the app made is invalid. Apple's
+    /// guidance is to make a new engine and nodes, reload the instrument, and configure
+    /// the session again, which `start()` does from scratch.
+    private func rebuildAfterMediaReset() {
+        log.notice("Media services were reset, rebuilding the audio engine")
+        cancelPendingStart()
+        state = .idle
+
+        engine = AVAudioEngine()
+        sampler = AVAudioUnitSampler()
+        tone = AVAudioUnitEQ(numberOfBands: 1)
+        reverb = AVAudioUnitReverb()
+        graphBuilt = false
+        soundLoad = nil
+        hasPianoSamples = false
+        soundLoadError = nil
+        applyTone()
+        applyReverbMix()
+        observeEngineConfiguration()
+
+        if wantsSound { start() }
     }
 }
