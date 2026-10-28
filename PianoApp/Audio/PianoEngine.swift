@@ -15,9 +15,9 @@ private let log = Logger(subsystem: "com.morgancollado.piano", category: "audio"
 /// running sampler. Every step logs to the Xcode console under the "audio" category, and
 /// failures are shown on screen through `statusMessage`.
 ///
-/// The sound bank loads on the main thread. Loading it on a background thread while the
-/// engine runs crashed inside `loadSoundBankInstrument` on device (iOS 27.2), so don't move
-/// it off the main thread without testing on a device.
+/// The sound bank loads on the main thread. Measured on device (iOS 27.2) it takes about
+/// 0.07 s, too short to notice, so a background load isn't worth the extra code or relying
+/// on undocumented thread safety in `AVAudioUnitSampler`.
 ///
 /// A start can be overtaken by a pause, an interruption or a restart. Each start carries a
 /// generation number, and a start whose number is out of date stops at its next step, so an

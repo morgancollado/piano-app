@@ -27,7 +27,7 @@ This overrides assumption 2 below.
 | 3. iPhone Duo layout | Fold alignment, gap, and laptop pose done and tested in `PianoCore`. Hooked to `reservedRegions` in `DuoSupport.swift`. Needs simulator and device testing. |
 | Look and feel | Instrument styling (lacquer body, red felt, ivory and glossy black keys, amber glow) and rising note trails above the keys. Fold layout now fills both sides and prefers ranges starting on C or F. |
 | 4. Hinge lid | Code written, off by default. Needs a check of the angle direction in the simulator. |
-| Review fixes (PR 1) | Sound engine rebuilds after a media services reset, drops starts overtaken by a pause, and silences sustained notes. `Piano.sf2` still loads on the main thread: a background load crashed on device (see `PianoEngine`). Octave buttons follow the keys on screen; book-pose trails cover both pages; Reduce Motion and Dynamic Type supported. `Piano.sf2` moved to Git LFS. 46 `PianoCore` tests passing on Linux; the app changes still need an Xcode build and a device test (try Settings → Developer → Reset Media Services). |
+| Review fixes (PR 1) | Sound engine rebuilds after a media services reset, drops starts overtaken by a pause, and silences sustained notes. `Piano.sf2` loads on the main thread (0.07 s on device). A launch crash turned out to be a Git LFS pointer in place of the SoundFont; the engine now checks the file header and shows a message instead. Octave buttons follow the keys on screen; book-pose trails cover both pages; Reduce Motion and Dynamic Type supported. `Piano.sf2` moved to Git LFS. 46 `PianoCore` tests passing on Linux; the app changes still need an Xcode build and a device test (try Settings → Developer → Reset Media Services). |
 
 ### Paid release: business setup (do any time)
 
