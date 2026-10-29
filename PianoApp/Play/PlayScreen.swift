@@ -76,7 +76,7 @@ private struct PlaySurface: View {
                 layout: layout,
                 velocityMode: velocityMode,
                 showsNoteLabels: showsNoteLabels,
-                onNoteEvents: { session.handle($0) }
+                onNoteEvents: { session.handle($0, eventUptime: $1) }
             )
             .frame(width: surface.keyboardRect.width, height: surface.keyboardRect.height)
             .position(x: surface.keyboardRect.midX, y: surface.keyboardRect.midY)

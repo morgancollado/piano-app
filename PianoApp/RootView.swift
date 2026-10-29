@@ -27,6 +27,27 @@ struct RootView: View {
                         }
                         .disabled(!session.canShiftOctave(by: 1))
                     }
+                    // Record, Play and Stop for a connected DAW. Only shown while it can
+                    // reach one (see the settings), so the bar stays short otherwise.
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        if session.showsTransportButtons {
+                            Button("Record", systemImage: "record.circle") {
+                                session.sendTransport(.record)
+                            }
+                            .tint(PianoTheme.recordButton)
+                            .accessibilityHint("Starts recording in your music app")
+
+                            Button("Play", systemImage: "play.fill") {
+                                session.sendTransport(.play)
+                            }
+                            .accessibilityHint("Plays in your music app")
+
+                            Button("Stop", systemImage: "stop.fill") {
+                                session.sendTransport(.stop)
+                            }
+                            .accessibilityHint("Stops your music app")
+                        }
+                    }
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         Toggle(isOn: $session.sustainOn) {
                             Label("Sustain", systemImage: "waveform")
@@ -47,8 +68,8 @@ struct RootView: View {
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             switch phase {
-            case .active: session.engine.start()
-            case .background: session.engine.pause()
+            case .active: session.didBecomeActive()
+            case .background: session.didEnterBackground()
             default: break
             }
         }

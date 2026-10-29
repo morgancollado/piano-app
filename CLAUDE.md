@@ -12,6 +12,8 @@ Read `docs/PLAN.md` (plan, decisions, progress) and `docs/IPHONE_DUO_REFERENCE.m
   can be written but not compiled. Say so when handing off.
 - `PianoApp.xcodeproj` uses folder-synced groups: new files under `PianoApp/` need no
   project edits.
+- Info.plist entries that build settings can't hold (arrays, like `NSBonjourServices`) go in
+  `Config/Info.plist`, which is merged with the generated one. Keep it outside `PianoApp/`.
 - `PianoApp/Piano.sf2` is stored with Git LFS (`.gitattributes`). Keep it that way when
   committing a rebuilt SoundFont.
 

@@ -6,7 +6,8 @@ struct KeyboardView: UIViewRepresentable {
     let layout: KeyboardLayout
     var velocityMode: VelocityMode = .fixed
     var showsNoteLabels = true
-    let onNoteEvents: ([NoteEvent]) -> Void
+    /// Note events and when their touches happened (see `KeyboardUIView.onNoteEvents`).
+    let onNoteEvents: ([NoteEvent], TimeInterval?) -> Void
 
     func makeUIView(context: Context) -> KeyboardUIView {
         KeyboardUIView(frame: .zero)

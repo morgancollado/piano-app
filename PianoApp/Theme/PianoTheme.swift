@@ -21,6 +21,8 @@ enum PianoTheme {
     static let noteTextShadow = Color.black.opacity(0.6)
     /// The "sound isn't working" line.
     static let soundWarning = Color.orange
+    /// The DAW Record button, red like a recorder's.
+    static let recordButton = Color.red
 
     // MARK: Felt strip above the keys
 

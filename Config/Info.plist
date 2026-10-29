@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Merged with the Info.plist Xcode generates from the build settings (GENERATE_INFOPLIST_FILE).
+  Kept outside PianoApp/ so the folder-synced group doesn't also copy it into the app bundle.
+-->
+<dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Piano sends the notes you play to music apps on your Mac or PC over Wi-Fi.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_apple-midi._udp</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Piano can connect to your Mac over Bluetooth to send the notes you play.</string>
+</dict>
+</plist>

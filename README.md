@@ -17,8 +17,10 @@ PianoApp/
   Keyboard/               UIKit multitouch keyboard + SwiftUI wrapper
   Play/                   Play screen, note display, app state and settings
   Duo/DuoSupport.swift    All iOS 27.1 iPhone Duo APIs (fold, hinge), behind availability checks
+  MIDI/                   MIDI out to DAWs (Wi-Fi, cable, Bluetooth), Reaper help
   Settings/               Settings sheet
-Packages/PianoCore/       Pure Swift logic with unit tests: notes, key layout, fold alignment, touches
+Config/Info.plist         Permission text and Bonjour service, merged with the generated Info.plist
+Packages/PianoCore/       Pure Swift logic with unit tests: notes, key layout, fold alignment, touches, MIDI messages
 ```
 
 ## Run it on your Mac

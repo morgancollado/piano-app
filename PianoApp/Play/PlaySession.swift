@@ -2,12 +2,14 @@ import Foundation
 import Observation
 import PianoCore
 
-/// App-wide state: the sound engine, what's playing, and the player's settings.
+/// App-wide state: the sound engine, MIDI out, what's playing, and the player's settings.
 /// Settings are saved to UserDefaults as they change.
 @MainActor
 @Observable
 final class PlaySession {
     let engine = PianoEngine()
+    /// Sends what you play to DAWs and other recording apps.
+    let midi: MIDIOutput
 
     private(set) var soundingNotes: Set<Note> = []
     /// Light trails for the notes being played, drawn above the keys.
@@ -65,7 +67,51 @@ final class PlaySession {
 
     var sustainOn: Bool {
         get { engine.sustainOn }
-        set { engine.sustainOn = newValue }
+        set {
+            engine.sustainOn = newValue
+            midi.sendSustain(newValue)
+        }
+    }
+
+    // MARK: MIDI out settings
+
+    /// Send notes, the pedal and the transport buttons as MIDI. On by default: the "Piano"
+    /// source costs nothing and shows no permission prompt.
+    var midiEnabled: Bool {
+        didSet {
+            defaults.set(midiEnabled, forKey: Keys.midiEnabled)
+            midi.isEnabled = midiEnabled
+            if midiEnabled { midi.sendSustain(sustainOn) }
+        }
+    }
+    var midiChannel: MIDIChannel {
+        didSet {
+            defaults.set(midiChannel.number, forKey: Keys.midiChannel)
+            midi.setChannel(midiChannel)
+        }
+    }
+    /// Off when you listen through the DAW's own instrument, so you don't hear two pianos.
+    var playsSoundLocally: Bool {
+        didSet { defaults.set(playsSoundLocally, forKey: Keys.playsSoundLocally) }
+    }
+    /// Lets a Mac or PC connect over Wi-Fi. Off until asked for, because turning it on shows
+    /// iOS's local network permission prompt.
+    var allowsNetworkMIDI: Bool {
+        didSet {
+            defaults.set(allowsNetworkMIDI, forKey: Keys.allowsNetworkMIDI)
+            midi.allowsNetworkConnections = allowsNetworkMIDI
+        }
+    }
+    var transportMode: TransportMode {
+        didSet { defaults.set(transportMode.rawValue, forKey: Keys.transportMode) }
+    }
+    var transportVisibility: TransportVisibility {
+        didSet { defaults.set(transportVisibility.rawValue, forKey: Keys.transportVisibility) }
+    }
+
+    /// Whether the Record, Play and Stop buttons are in the toolbar.
+    var showsTransportButtons: Bool {
+        midiEnabled && transportVisibility.showsButtons(isConnected: midi.isConnected)
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -81,19 +127,40 @@ final class PlaySession {
         reverbMix = defaults.object(forKey: Keys.reverbMix) as? Double ?? 0.15
         hingeControlsTone = defaults.object(forKey: Keys.hingeControlsTone) as? Bool ?? false
 
+        midi = MIDIOutput(defaults: defaults)
+        midiEnabled = defaults.object(forKey: Keys.midiEnabled) as? Bool ?? true
+        let savedChannel = (defaults.object(forKey: Keys.midiChannel) as? Int).flatMap(MIDIChannel.init(number:))
+        midiChannel = savedChannel.flatMap { MIDIChannel.noteChoices.contains($0) ? $0 : nil } ?? .defaultNotes
+        playsSoundLocally = defaults.object(forKey: Keys.playsSoundLocally) as? Bool ?? true
+        allowsNetworkMIDI = defaults.object(forKey: Keys.allowsNetworkMIDI) as? Bool ?? false
+        transportMode = defaults.string(forKey: Keys.transportMode).flatMap(TransportMode.init(rawValue:)) ?? .learnable
+        transportVisibility = defaults.string(forKey: Keys.transportVisibility)
+            .flatMap(TransportVisibility.init(rawValue:)) ?? .whenConnected
+
         engine.reverbMix = reverbMix
         applyTone()
+        // didSet doesn't run during init, so hand the saved MIDI settings over here.
+        midi.isEnabled = midiEnabled
+        midi.setChannel(midiChannel)
+        midi.allowsNetworkConnections = allowsNetworkMIDI
     }
 
-    func handle(_ events: [NoteEvent]) {
+    /// - Parameter eventUptime: when the touches happened (`UIEvent.timestamp`), so a DAW
+    ///   records the notes where the finger landed.
+    func handle(_ events: [NoteEvent], eventUptime: TimeInterval? = nil) {
+        midi.send(events, eventUptime: eventUptime)
         let now = Date.timeIntervalSinceReferenceDate
         for event in events {
             switch event.kind {
             case .on:
-                engine.noteOn(event.note, velocity: event.velocity)
+                if playsSoundLocally {
+                    engine.noteOn(event.note, velocity: event.velocity)
+                }
                 soundingNotes.insert(event.note)
                 trails.noteOn(event.note, velocity: event.velocity, at: now)
             case .off:
+                // Always sent, even with the app's sound off, so a note started before the
+                // setting changed can't stay on.
                 engine.noteOff(event.note)
                 soundingNotes.remove(event.note)
                 trails.noteOff(event.note, at: now)
@@ -115,6 +182,32 @@ final class PlaySession {
             guard !Task.isCancelled, let self else { return }
             self.trails.prune(at: Date.timeIntervalSinceReferenceDate, height: self.trailClearDistance)
         }
+    }
+
+    // MARK: - App lifecycle and MIDI
+
+    func didBecomeActive() {
+        engine.start()
+        // The DAW heard the pedal go up when the app left; put it back where the toolbar is.
+        if sustainOn { midi.sendSustain(true) }
+    }
+
+    func didEnterBackground() {
+        engine.pause()
+        // Nothing can be played in the background, so end every note the DAW is holding.
+        midi.releaseAll()
+    }
+
+    /// Record, Play or Stop in the DAW.
+    func sendTransport(_ command: TransportCommand) {
+        midi.send(command, mode: transportMode)
+    }
+
+    /// Silences the app and tells every DAW to let go of every note.
+    func stopAllNotes() {
+        engine.allNotesOff()
+        midi.releaseAll()
+        if sustainOn { midi.sendSustain(true) }
     }
 
     /// Call whenever the keyboard on screen changes.
@@ -156,5 +249,11 @@ final class PlaySession {
         static let toneBrightness = "toneBrightness"
         static let reverbMix = "reverbMix"
         static let hingeControlsTone = "hingeControlsTone"
+        static let midiEnabled = "midiEnabled"
+        static let midiChannel = "midiChannel"
+        static let playsSoundLocally = "playsSoundLocally"
+        static let allowsNetworkMIDI = "allowsNetworkMIDI"
+        static let transportMode = "transportMode"
+        static let transportVisibility = "transportVisibility"
     }
 }

@@ -11,7 +11,9 @@ final class KeyboardUIView: UIView {
     var showsNoteLabels = true {
         didSet { if showsNoteLabels != oldValue { setNeedsDisplay() } }
     }
-    var onNoteEvents: (([NoteEvent]) -> Void)?
+    /// Note events, with when the touches happened (`UIEvent.timestamp`, seconds since the
+    /// device started), or nil when there's no touch event behind them.
+    var onNoteEvents: (([NoteEvent], TimeInterval?) -> Void)?
 
     private var tracker = TouchTracker<ObjectIdentifier>()
 
@@ -46,7 +48,7 @@ final class KeyboardUIView: UIView {
             let (note, velocity) = noteAndVelocity(for: touch)
             events += tracker.begin(ObjectIdentifier(touch), on: note, velocity: velocity)
         }
-        send(events)
+        send(events, at: event?.timestamp)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -55,22 +57,22 @@ final class KeyboardUIView: UIView {
             let (note, velocity) = noteAndVelocity(for: touch)
             events += tracker.move(ObjectIdentifier(touch), to: note, velocity: velocity)
         }
-        send(events)
+        send(events, at: event?.timestamp)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        send(touches.flatMap { tracker.end(ObjectIdentifier($0)) })
+        send(touches.flatMap { tracker.end(ObjectIdentifier($0)) }, at: event?.timestamp)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         // Cancelled touches (folding mid-note, a system gesture) must still stop their notes.
-        send(touches.flatMap { tracker.end(ObjectIdentifier($0)) })
+        send(touches.flatMap { tracker.end(ObjectIdentifier($0)) }, at: event?.timestamp)
     }
 
     override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
         if newWindow == nil {
-            send(tracker.endAll())
+            send(tracker.endAll(), at: nil)
         }
     }
 
@@ -82,9 +84,9 @@ final class KeyboardUIView: UIView {
         return (key.note, velocity)
     }
 
-    private func send(_ events: [NoteEvent]) {
+    private func send(_ events: [NoteEvent], at timestamp: TimeInterval?) {
         guard !events.isEmpty else { return }
-        onNoteEvents?(events)
+        onNoteEvents?(events, timestamp)
         setNeedsDisplay()
     }
 

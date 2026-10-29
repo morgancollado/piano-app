@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsScreen: View {
     @Environment(PlaySession.self) private var session
     @Environment(\.dismiss) private var dismiss
+    @State private var showingBluetooth = false
 
     var body: some View {
         @Bindable var session = session
@@ -46,6 +47,8 @@ struct SettingsScreen: View {
                     }
                 }
 
+                midiSection(session: session)
+
                 Section {
                     Toggle("Hinge controls tone", isOn: $session.hingeControlsTone)
                 } header: {
@@ -66,6 +69,69 @@ struct SettingsScreen: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", systemImage: "checkmark") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showingBluetooth) {
+                BluetoothMIDISheet()
+                    .preferredColorScheme(.dark)
+            }
+        }
+    }
+
+    /// Sending what you play to a DAW (Reaper, Logic, GarageBand and others).
+    @ViewBuilder
+    private func midiSection(session: PlaySession) -> some View {
+        @Bindable var session = session
+
+        Section {
+            Toggle("Send notes as MIDI", isOn: $session.midiEnabled)
+
+            if session.midiEnabled {
+                Picker("MIDI channel", selection: $session.midiChannel) {
+                    ForEach(MIDIChannel.noteChoices) { channel in
+                        Text(String(channel.number)).tag(channel)
+                    }
+                }
+                Toggle("Play sound in this app", isOn: $session.playsSoundLocally)
+                Toggle("Allow Wi-Fi connections", isOn: $session.allowsNetworkMIDI)
+                Button("Connect over Bluetooth…", systemImage: "dot.radiowaves.left.and.right") {
+                    showingBluetooth = true
+                }
+
+                LabeledContent("Connected") {
+                    if session.midi.connectedNames.isEmpty {
+                        Text("Nothing connected")
+                    } else {
+                        Text(session.midi.connectedNames.joined(separator: ", "))
+                    }
+                }
+
+                Picker("Record, Play and Stop", selection: $session.transportVisibility) {
+                    Text("When connected").tag(TransportVisibility.whenConnected)
+                    Text("Always").tag(TransportVisibility.always)
+                    Text("Never").tag(TransportVisibility.never)
+                }
+                Picker("Button messages", selection: $session.transportMode) {
+                    Text("Learnable (MIDI learn)").tag(TransportMode.learnable)
+                    Text("MIDI Machine Control").tag(TransportMode.machineControl)
+                }
+
+                NavigationLink {
+                    ReaperSetupView()
+                } label: {
+                    Label("Set Up Reaper", systemImage: "questionmark.circle")
+                }
+
+                Button("Stop All Notes", systemImage: "speaker.slash") {
+                    session.stopAllNotes()
+                }
+            }
+        } header: {
+            Text("Recording Apps (MIDI)")
+        } footer: {
+            if let error = session.midi.setupError {
+                Text(error)
+            } else if session.midiEnabled {
+                Text("Apps on this iPhone see an input called Piano. A Mac connects over Wi-Fi (Audio MIDI Setup → MIDI Studio → Network), a USB-C cable (Audio MIDI Setup → Audio Devices → Enable), or Bluetooth. Turn off Play sound in this app when your DAW plays the notes.")
             }
         }
     }

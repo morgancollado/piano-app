@@ -1,6 +1,29 @@
 # Plan: play and record into a DAW (MIDI out and transport buttons)
 
-Status: planned, 2026-10-29. Nothing is built yet.
+Status: code written, 2026-10-29. PianoCore part tested on Linux (75 tests passing). The
+app part (`PianoApp/MIDI/`, settings, toolbar) is written but **not yet compiled**: it needs
+an Xcode build on the Mac, then the hardware tests in "Steps".
+
+### Built, and where it differs from the plan below
+
+| Plan | What was built | Why |
+| --- | --- | --- |
+| MIDI channel picker 1–16 | 1–15 | Channel 16 carries the buttons. Letting notes use it too would let a track set to channel 16 record the button presses. |
+| Send to every destination | Every destination that belongs to a device (Wi-Fi session, cable, Bluetooth, USB gear). Other apps' virtual inputs are skipped. | Apps on the same iPhone already read the "Piano" source. Sending to their own inputs as well (AUM has one, for example) would play every note twice. |
+| `MIDIOutput` rebuilds after a media services reset | Not done | That reset restarts the audio system. CoreMIDI runs in its own server and isn't affected. |
+| Timestamp field on `NoteEvent` | The keyboard passes `UIEvent.timestamp` alongside the events | Same result without touching `NoteEvent` or `TouchTracker`. Ages over 50 ms, or in the future, are sent as "now", so a clock mismatch can't delay notes. |
+| Transport button press and release read separately | Each tap sends 127 then 0 | Toolbar buttons don't reliably report press and release separately. |
+| `NetworkMIDI.swift` | Part of `MIDIOutput.swift` | It's about 20 lines. |
+| `BluetoothMIDIView.swift` | Same file name; the sheet says to keep it open until the Mac connects | Apple's screen may stop advertising when it closes. |
+
+Files: `Packages/PianoCore/Sources/PianoCore/MIDIOut.swift` (+ tests),
+`PianoApp/MIDI/MIDIOutput.swift`, `BluetoothMIDIView.swift`, `ReaperSetupView.swift`,
+`Config/Info.plist`, and changes to `PlaySession`, `RootView`, `SettingsScreen`,
+`KeyboardUIView`/`KeyboardView`, `PlayScreen` and `PianoTheme`.
+
+First things to check after the first Xcode build: the cable route's "IDAM MIDI Host"
+destination counts as a device (if not, the cable route sends nothing; see
+`MIDIOutput.externalDestinations()`), and Reaper doesn't fire a learned button twice per tap.
 
 Goal: the app works as a MIDI keyboard for a DAW on another device. Notes you play are
 recorded by the DAW, and Record, Play and Stop buttons in the app run the DAW's transport.
