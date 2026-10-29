@@ -28,7 +28,7 @@ This overrides assumption 2 below.
 | Look and feel | Instrument styling (lacquer body, red felt, ivory and glossy black keys, amber glow) and rising note trails above the keys. Fold layout now fills both sides and prefers ranges starting on C or F. |
 | 4. Hinge lid | Code written, off by default. Needs a check of the angle direction in the simulator. |
 | Review fixes (PR 1) | Sound engine rebuilds after a media services reset, drops starts overtaken by a pause, and silences sustained notes. `Piano.sf2` loads on the main thread (0.07 s on device). A launch crash turned out to be a Git LFS pointer in place of the SoundFont; the engine now checks the file header and shows a message instead. Octave buttons follow the keys on screen; book-pose trails cover both pages; Reduce Motion and Dynamic Type supported. `Piano.sf2` moved to Git LFS. 46 `PianoCore` tests passing on Linux; the app changes still need an Xcode build and a device test (try Settings → Developer → Reset Media Services). |
-| MIDI out to recording apps | Planned in [MIDI_OUT_PLAN.md](MIDI_OUT_PLAN.md): send played notes and the sustain pedal to a DAW on the same iPhone, a Mac or a PC (virtual source, Wi-Fi, Bluetooth, USB-C). Not started. |
+| MIDI out to recording apps | Planned in [MIDI_OUT_PLAN.md](MIDI_OUT_PLAN.md): send played notes, the sustain pedal and Record/Play/Stop to a DAW (Reaper on the Mac first) over Wi-Fi, USB-C or Bluetooth. Not started. |
 
 ### Paid release: business setup (do any time)
 
@@ -203,7 +203,7 @@ Each phase ends with something you can run and judge.
 - Record and play back (MIDI events → `.mid` file, played back through the sampler), and export to audio.
 - Metronome.
 - External MIDI keyboards over USB-C or Bluetooth light up the on-screen keys.
-- Send the notes you play to a DAW for recording (MIDI out): [MIDI_OUT_PLAN.md](MIDI_OUT_PLAN.md).
+- Send the notes you play to a DAW for recording, with Record/Play/Stop buttons (MIDI out): [MIDI_OUT_PLAN.md](MIDI_OUT_PLAN.md).
 - A falling-notes view for MIDI songs (`Canvas` + `TimelineView`, smooth at 120 Hz).
   It sits in the top region in laptop pose. Use public-domain pieces you encode yourself.
 - Extra sounds (electric piano, organ) if the SoundFont budget allows.
